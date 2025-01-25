@@ -1,0 +1,32 @@
+[2025-01-17 08:43:41,742][       train.py][line:  67][    INFO] config: Namespace(config_path='config/busi.yaml', k_shot=16, config={'version': 'v1.0.0', 'random_seed': 100, 'data_root': 'data', 'train_dataset': 'busi', 'test_datasets': ['busi'], 'epoch': 200, 'batch_size': 8, 'print_freq_step': 10, 'val_freq_epoch': 1, 'image_size': 224, 'model_name': 'ViT-L-14', 'layers_out': [12, 18, 24], 'anomaly_tasks': {'CutpasteTask': 0.25, 'GaussIntensityChangeTask': 0.25, 'SourceTask': 0.25, 'IdentityTask': 0.25}, 'prompt_maker': 'coop', 'n_learnable_token': 8, 'CSC': True, 'class_token_positions': ['end'], 'save_root': 'results/2025_01_17_08_43_41', 'prompts': {'normal': ['normal', 'healthy', 'negative', 'unremarkable', 'clear', 'asymptomatic', 'normal findings', 'no findings', 'in good health', 'no evidence of disease'], 'abnormal': ['abnormal', 'positive', 'symptomatic', 'disease', 'lesion', 'pathological', 'impaired', 'evidence of disease', 'abnormal finding', 'pathological condition', 'pathological abnormality']}, 'model_cfg': {'embed_dim': 768, 'vision_cfg': {'image_size': 224, 'layers': 24, 'width': 1024, 'patch_size': 14}, 'text_cfg': {'context_length': 77, 'vocab_size': 49408, 'width': 768, 'heads': 12, 'layers': 12}}})
+[2025-01-17 08:43:41,763][       train.py][line:  74][    INFO] load CoOp
+[2025-01-17 08:43:41,947][       train.py][line: 131][    INFO] train data (busi) len 16
+[2025-01-17 08:43:41,947][       train.py][line: 134][    INFO] test data (busi) len 748
+[2025-01-17 08:43:41,947][       train.py][line: 137][    INFO] anomaly syn task is CutpasteTask, sampling probability is 0.25
+[2025-01-17 08:43:41,947][       train.py][line: 137][    INFO] anomaly syn task is GaussIntensityChangeTask, sampling probability is 0.25
+[2025-01-17 08:43:41,947][       train.py][line: 137][    INFO] anomaly syn task is SourceTask, sampling probability is 0.25
+[2025-01-17 08:43:41,947][       train.py][line: 137][    INFO] anomaly syn task is IdentityTask, sampling probability is 0.25
+[2025-01-17 08:44:29,907][       train.py][line: 181][    INFO] (busi): Epoch: 1, image auroc: 0.4150, pixel_auroc: 0.7339,
+[2025-01-17 08:44:29,907][       train.py][line: 194][    INFO] (busi best): image auroc: 0.4150, pixel auroc: 0.7339,
+[2025-01-17 08:44:29,907][       train.py][line: 208][    INFO] save checkpoints in epoch: 1
+[2025-01-17 08:45:17,234][       train.py][line: 181][    INFO] (busi): Epoch: 2, image auroc: 0.4481, pixel_auroc: 0.8148,
+[2025-01-17 08:45:17,234][       train.py][line: 194][    INFO] (busi best): image auroc: 0.4481, pixel auroc: 0.8148,
+[2025-01-17 08:45:17,234][       train.py][line: 208][    INFO] save checkpoints in epoch: 2
+[2025-01-17 08:46:04,856][       train.py][line: 181][    INFO] (busi): Epoch: 3, image auroc: 0.6063, pixel_auroc: 0.8364,
+[2025-01-17 08:46:04,856][       train.py][line: 194][    INFO] (busi best): image auroc: 0.6063, pixel auroc: 0.8364,
+[2025-01-17 08:46:04,856][       train.py][line: 208][    INFO] save checkpoints in epoch: 3
+[2025-01-17 08:46:57,262][       train.py][line: 181][    INFO] (busi): Epoch: 4, image auroc: 0.8663, pixel_auroc: 0.8893,
+[2025-01-17 08:46:57,263][       train.py][line: 194][    INFO] (busi best): image auroc: 0.8663, pixel auroc: 0.8893,
+[2025-01-17 08:46:57,263][       train.py][line: 208][    INFO] save checkpoints in epoch: 4
+[2025-01-17 08:47:03,309][       train.py][line: 264][    INFO] Epoch: [5/200]	Iter: [10/400]	Loss 0.87863 (0.87608)	
+[2025-01-17 08:47:50,573][       train.py][line: 181][    INFO] (busi): Epoch: 5, image auroc: 0.8697, pixel_auroc: 0.8896,
+[2025-01-17 08:47:50,573][       train.py][line: 194][    INFO] (busi best): image auroc: 0.8697, pixel auroc: 0.8896,
+[2025-01-17 08:47:50,573][       train.py][line: 208][    INFO] save checkpoints in epoch: 5
+[2025-01-17 08:48:44,794][       train.py][line: 181][    INFO] (busi): Epoch: 6, image auroc: 0.8669, pixel_auroc: 0.8848,
+[2025-01-17 08:48:44,794][       train.py][line: 194][    INFO] (busi best): image auroc: 0.8697, pixel auroc: 0.8896,
+[2025-01-17 08:49:38,108][       train.py][line: 181][    INFO] (busi): Epoch: 7, image auroc: 0.8432, pixel_auroc: 0.8889,
+[2025-01-17 08:49:38,108][       train.py][line: 194][    INFO] (busi best): image auroc: 0.8697, pixel auroc: 0.8896,
+[2025-01-17 08:50:33,094][       train.py][line: 181][    INFO] (busi): Epoch: 8, image auroc: 0.8466, pixel_auroc: 0.8860,
+[2025-01-17 08:50:33,095][       train.py][line: 194][    INFO] (busi best): image auroc: 0.8697, pixel auroc: 0.8896,
+[2025-01-17 08:51:27,393][       train.py][line: 181][    INFO] (busi): Epoch: 9, image auroc: 0.8509, pixel_auroc: 0.8980,
+[2025-01-17 08:51:27,393][       train.py][line: 194][    INFO] (busi best): image auroc: 0.8697, pixel auroc: 0.8896,

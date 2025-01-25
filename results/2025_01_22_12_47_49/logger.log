@@ -1,0 +1,28 @@
+[2025-01-22 12:47:49,276][       train.py][line:  67][    INFO] config: Namespace(config_path='config/brainmri.yaml', k_shot=16, config={'version': 'v1.0.0', 'random_seed': 100, 'data_root': 'data', 'train_dataset': 'brainmri', 'test_datasets': ['brainmri'], 'epoch': 200, 'batch_size': 8, 'print_freq_step': 10, 'val_freq_epoch': 1, 'image_size': 224, 'model_name': 'ViT-B-32-quickgelu', 'layers_out': [12, 18, 24], 'anomaly_tasks': {'CutpasteTask': 0.25, 'GaussIntensityChangeTask': 0.25, 'SourceTask': 0.25, 'IdentityTask': 0.25}, 'prompt_maker': 'coop', 'n_learnable_token': 8, 'CSC': True, 'class_token_positions': ['end'], 'save_root': 'results/2025_01_22_12_47_49', 'prompts': {'normal': ['normal', 'healthy', 'negative', 'unremarkable', 'clear', 'asymptomatic', 'normal findings', 'no findings', 'in good health', 'no evidence of disease'], 'abnormal': ['abnormal', 'positive', 'symptomatic', 'disease', 'lesion', 'pathological', 'impaired', 'evidence of disease', 'abnormal finding', 'pathological condition', 'pathological abnormality']}, 'model_cfg': {'embed_dim': 512, 'quick_gelu': True, 'vision_cfg': {'image_size': 224, 'layers': 12, 'width': 768, 'patch_size': 32}, 'text_cfg': {'context_length': 77, 'vocab_size': 49408, 'width': 512, 'heads': 8, 'layers': 12}}})
+[2025-01-22 12:47:49,284][       train.py][line:  74][    INFO] load CoOp
+[2025-01-22 12:47:49,513][       train.py][line: 131][    INFO] train data (brainmri) len 16
+[2025-01-22 12:47:49,513][       train.py][line: 134][    INFO] test data (brainmri) len 220
+[2025-01-22 12:47:49,513][       train.py][line: 137][    INFO] anomaly syn task is CutpasteTask, sampling probability is 0.25
+[2025-01-22 12:47:49,513][       train.py][line: 137][    INFO] anomaly syn task is GaussIntensityChangeTask, sampling probability is 0.25
+[2025-01-22 12:47:49,513][       train.py][line: 137][    INFO] anomaly syn task is SourceTask, sampling probability is 0.25
+[2025-01-22 12:47:49,513][       train.py][line: 137][    INFO] anomaly syn task is IdentityTask, sampling probability is 0.25
+[2025-01-22 12:47:59,267][       train.py][line: 186][    INFO] (brainmri): Epoch: 1, image auroc: 0.4418,
+[2025-01-22 12:47:59,267][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.4418,
+[2025-01-22 12:47:59,267][       train.py][line: 208][    INFO] save checkpoints in epoch: 1
+[2025-01-22 12:48:08,733][       train.py][line: 186][    INFO] (brainmri): Epoch: 2, image auroc: 0.5579,
+[2025-01-22 12:48:08,733][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.5579,
+[2025-01-22 12:48:08,734][       train.py][line: 208][    INFO] save checkpoints in epoch: 2
+[2025-01-22 12:48:18,470][       train.py][line: 186][    INFO] (brainmri): Epoch: 3, image auroc: 0.5227,
+[2025-01-22 12:48:18,470][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.5579,
+[2025-01-22 12:48:28,235][       train.py][line: 186][    INFO] (brainmri): Epoch: 4, image auroc: 0.5278,
+[2025-01-22 12:48:28,236][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.5579,
+[2025-01-22 12:48:33,490][       train.py][line: 264][    INFO] Epoch: [5/200]	Iter: [10/400]	Loss 0.94217 (0.95271)	
+[2025-01-22 12:48:37,994][       train.py][line: 186][    INFO] (brainmri): Epoch: 5, image auroc: 0.8156,
+[2025-01-22 12:48:37,994][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.8156,
+[2025-01-22 12:48:37,994][       train.py][line: 208][    INFO] save checkpoints in epoch: 5
+[2025-01-22 12:48:47,619][       train.py][line: 186][    INFO] (brainmri): Epoch: 6, image auroc: 0.8908,
+[2025-01-22 12:48:47,619][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.8908,
+[2025-01-22 12:48:47,619][       train.py][line: 208][    INFO] save checkpoints in epoch: 6
+[2025-01-22 12:48:57,501][       train.py][line: 186][    INFO] (brainmri): Epoch: 7, image auroc: 0.8940,
+[2025-01-22 12:48:57,501][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.8940,
+[2025-01-22 12:48:57,501][       train.py][line: 208][    INFO] save checkpoints in epoch: 7

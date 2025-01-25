@@ -1,0 +1,27 @@
+to run the RN50 in the brainmri.yaml
+
+use this configuration
+
+model_name: RN50
+layers_out: [1, 2, 3, 4]
+
+What Is layers_out?
+
+layers_out is a list of indices representing the stages (or blocks) of the ResNet50 model.
+These indices correspond to the outputs of the major stages of the ResNet50 architecture.
+How ResNet50 Is Structured:
+
+ResNet50 is divided into 4 main stages (or blocks):
+Stage 1: Output of layer1 (3 residual blocks).
+Stage 2: Output of layer2 (4 residual blocks).
+Stage 3: Output of layer3 (6 residual blocks).
+Stage 4: Output of layer4 (3 residual blocks).
+
+Then in each block, we have multiple conv layers.
+
+here layers_out should not be confused with the conv layers.
+These are the stages and each stage has different number of blocks.
+
+
+
+
