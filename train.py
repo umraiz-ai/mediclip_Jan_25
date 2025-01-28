@@ -74,7 +74,7 @@ def main(args):
     logger.info("config: {}".format(pprint.pformat(args)))
 
     necker = Necker(clip_model=model).to(model.device)
-    adapter = Adapter(clip_model=model,target=args.config.model_cfg['embed_dim']).to(model.device)
+    #adapter = Adapter(clip_model=model,target=args.config.model_cfg['embed_dim']).to(model.device)
 
     if args.config.prompt_maker=='coop':
         from models.CoOp import PromptMaker
@@ -92,10 +92,16 @@ def main(args):
 
     map_maker = MapMaker(image_size=args.config.image_size).to(model.device)
 
+    # optimizer = torch.optim.Adam([
+    #         {'params': prompt_maker.prompt_learner.parameters(),'lr': 0.001},
+    #         {'params': adapter.parameters(),"lr":0.001},
+    #     ], lr=0.001, betas=(0.5, 0.999))
+
+
     optimizer = torch.optim.Adam([
-            {'params': prompt_maker.prompt_learner.parameters(),'lr': 0.001},
-            {'params': adapter.parameters(),"lr":0.001},
+            {'params': prompt_maker.prompt_learner.parameters(),'lr': 0.001},            
         ], lr=0.001, betas=(0.5, 0.999))
+
 
     train_dataset = TrainDataset(args=args.config,
                                     source=os.path.join(args.config.data_root,args.config.train_dataset),
@@ -146,6 +152,19 @@ def main(args):
     for epoch in range(0, args.config.epoch):
         last_iter = epoch * len(train_dataloader)
 
+        # train_one_epoch(
+        #     args,
+        #     train_dataloader,
+        #     optimizer,
+        #     epoch,
+        #     last_iter,
+        #     logger,
+        #     model,
+        #     necker,
+        #     adapter,
+        #     prompt_maker,
+        #     map_maker,
+        # )
         train_one_epoch(
             args,
             train_dataloader,
@@ -155,10 +174,14 @@ def main(args):
             logger,
             model,
             necker,
-            adapter,
             prompt_maker,
             map_maker,
         )
+
+
+
+
+
 
         if (epoch+1) % args.config.val_freq_epoch == 0:
 
@@ -214,11 +237,24 @@ def main(args):
             if save_flag:
                 logger.info("save checkpoints in epoch: {}".format(epoch+1))
                 torch.save({
-                        "adapter_state_dict": adapter.state_dict(),
+                        #"adapter_state_dict": adapter.state_dict(),
                         "prompt_state_dict": prompt_maker.prompt_learner.state_dict(),
                     }, os.path.join(args.config.save_root, 'checkpoints_{}.pkl'.format(epoch + 1)))
 
 
+# def train_one_epoch(
+#             args,
+#             train_dataloader,
+#             optimizer,
+#             epoch,
+#             start_iter,
+#             logger,
+#             clip_model,
+#             necker,
+#             adapter,
+#             prompt_maker,
+#             map_maker,
+# ):
 def train_one_epoch(
             args,
             train_dataloader,
@@ -228,17 +264,17 @@ def train_one_epoch(
             logger,
             clip_model,
             necker,
-            adapter,
             prompt_maker,
             map_maker,
 ):
+
 
     loss_meter = AverageMeter(args.config.print_freq_step)
 
     focal_criterion = FocalLoss()
     dice_criterion = BinaryDiceLoss()
 
-    adapter.train()
+    #adapter.train()
     prompt_maker.train()
 
     for i, input in enumerate(train_dataloader):
@@ -251,9 +287,72 @@ def train_one_epoch(
             _, image_tokens = clip_model.encode_image(images,out_layers=args.config.layers_out)
             image_features = necker(image_tokens)
 
-        vision_adapter_features = adapter(image_features)
-        propmt_adapter_features = prompt_maker(vision_adapter_features)
-        anomaly_map = map_maker(vision_adapter_features,propmt_adapter_features)
+        #vision_adapter_features = adapter(image_features)
+        # Process image_features if it's a list
+        if isinstance(image_features, list):
+            print(f"image_features is a list with length: {len(image_features)}")
+            image_features = torch.cat(image_features, dim=1)  # Combine along tokens dimension
+            print(f"Combined image_features shape: {image_features.shape}")
+
+        print(f"image_features shape: {image_features.shape}")
+
+# Ensure image_features has the correct shape
+        if len(image_features.shape) == 4:
+            B, Tokens, H, W = image_features.shape
+            vision_adapter_feature = image_features.permute(0, 2, 3, 1)  # (B, H, W, Tokens)
+            print(f"vision_adapter_feature shape: {vision_adapter_feature.shape}")
+        else:
+    # Handle the case where image_features does not have 4 dimensions
+            print(f"Unexpected shape for image_features: {image_features.shape}")
+    # Adjust the shape as needed, for example:
+            B, Tokens = image_features.shape
+            H, W = 1, 1  # Set default values for H and W if they are not available
+            vision_adapter_feature = image_features.view(B, H, W, Tokens)
+            print(f"Adjusted vision_adapter_feature shape: {vision_adapter_feature.shape}")
+
+        
+        # Generate prompt_adapter_features
+        prompt_adapter_features = prompt_maker(image_features)
+        # Project prompt_adapter_features to match vision_adapter_feature
+        linear_projection = torch.nn.Linear(prompt_adapter_features.size(-1), vision_adapter_feature.shape[-1]).to(clip_model.device)
+        prompt_adapter_features = linear_projection(prompt_adapter_features)
+
+        last_dim = prompt_adapter_features.numel() // (B * H * W)
+        if last_dim * B * H * W != prompt_adapter_features.numel():
+            raise ValueError("Cannot reshape prompt_adapter_features to the desired shape.")
+
+        # Reshape prompt_adapter_features
+        prompt_adapter_features = prompt_adapter_features.view(B, H, W, last_dim)
+        print(f"Final prompt_adapter_features shape: {prompt_adapter_features.shape}")
+
+        # Ensure prompt_adapter_features has the correct shape
+        if len(prompt_adapter_features.shape) != 4:
+            B, H, W, C = vision_adapter_feature.shape
+             #Calculate the correct size for the last dimension
+            new_C = prompt_adapter_features.numel() // (B * H * W)
+            
+            prompt_adapter_features = prompt_adapter_features.view(B, H, W, new_C)
+            print(f"Adjusted prompt_adapter_features shape: {prompt_adapter_features.shape}")
+
+
+
+        if len(vision_adapter_feature.shape) != 4:
+            raise ValueError(f"vision_adapter_feature does not have 4 dimensions: {vision_adapter_feature.shape}")
+
+
+        # Pass processed tensors to map_maker
+        anomaly_map = map_maker(vision_adapter_feature, prompt_adapter_features)
+        
+
+
+        #propmt_adapter_features = prompt_maker(vision_adapter_features)
+        #anomaly_map = map_maker(vision_adapter_features,propmt_adapter_features)
+  
+        # If image_features is a list, stack it into a tensor
+        
+        
+
+
 
         loss = []
 
@@ -284,7 +383,7 @@ def train_one_epoch(
 
 def validate(args, test_dataloaders, epoch, clip_model, necker, adapter, prompt_maker, map_maker):
 
-    adapter.eval()
+    #adapter.eval()
     prompt_maker.eval()
     results = {}
 
