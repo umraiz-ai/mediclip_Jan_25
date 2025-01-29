@@ -1,0 +1,22 @@
+[2025-01-28 12:07:08,980][       train.py][line:  67][    INFO] config: Namespace(config_path='config/brainmri.yaml', k_shot=16, config={'version': 'v1.0.0', 'random_seed': 100, 'data_root': 'data', 'train_dataset': 'brainmri', 'test_datasets': ['brainmri'], 'epoch': 200, 'batch_size': 8, 'print_freq_step': 10, 'val_freq_epoch': 1, 'image_size': 224, 'model_name': 'RN101', 'layers_out': [1, 2, 3, 4], 'anomaly_tasks': {'CutpasteTask': 0.25, 'GaussIntensityChangeTask': 0.25, 'SourceTask': 0.25, 'IdentityTask': 0.25}, 'prompt_maker': 'coop', 'n_learnable_token': 8, 'CSC': True, 'class_token_positions': ['end'], 'save_root': 'results/2025_01_28_12_07_08', 'prompts': {'normal': ['normal', 'healthy', 'negative', 'unremarkable', 'clear', 'asymptomatic', 'normal findings', 'no findings', 'in good health', 'no evidence of disease'], 'abnormal': ['abnormal', 'positive', 'symptomatic', 'disease', 'lesion', 'pathological', 'impaired', 'evidence of disease', 'abnormal finding', 'pathological condition', 'pathological abnormality']}, 'model_cfg': {'embed_dim': 512, 'vision_cfg': {'image_size': 224, 'layers': [3, 4, 23, 3], 'width': 64, 'patch_size': None}, 'text_cfg': {'context_length': 77, 'vocab_size': 49408, 'width': 512, 'heads': 8, 'layers': 12}}})
+[2025-01-28 12:07:08,997][       train.py][line:  74][    INFO] load CoOp
+[2025-01-28 12:07:09,134][       train.py][line: 131][    INFO] train data (brainmri) len 16
+[2025-01-28 12:07:09,134][       train.py][line: 134][    INFO] test data (brainmri) len 220
+[2025-01-28 12:07:09,134][       train.py][line: 137][    INFO] anomaly syn task is CutpasteTask, sampling probability is 0.25
+[2025-01-28 12:07:09,134][       train.py][line: 137][    INFO] anomaly syn task is GaussIntensityChangeTask, sampling probability is 0.25
+[2025-01-28 12:07:09,134][       train.py][line: 137][    INFO] anomaly syn task is SourceTask, sampling probability is 0.25
+[2025-01-28 12:07:09,134][       train.py][line: 137][    INFO] anomaly syn task is IdentityTask, sampling probability is 0.25
+[2025-01-28 12:07:19,805][       train.py][line: 186][    INFO] (brainmri): Epoch: 1, image auroc: 0.6321,
+[2025-01-28 12:07:19,805][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.6321,
+[2025-01-28 12:07:19,805][       train.py][line: 208][    INFO] save checkpoints in epoch: 1
+[2025-01-28 12:07:30,157][       train.py][line: 186][    INFO] (brainmri): Epoch: 2, image auroc: 0.5914,
+[2025-01-28 12:07:30,158][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.6321,
+[2025-01-28 12:07:40,658][       train.py][line: 186][    INFO] (brainmri): Epoch: 3, image auroc: 0.5812,
+[2025-01-28 12:07:40,659][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.6321,
+[2025-01-28 12:07:51,052][       train.py][line: 186][    INFO] (brainmri): Epoch: 4, image auroc: 0.6538,
+[2025-01-28 12:07:51,052][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.6538,
+[2025-01-28 12:07:51,052][       train.py][line: 208][    INFO] save checkpoints in epoch: 4
+[2025-01-28 12:07:56,224][       train.py][line: 264][    INFO] Epoch: [5/200]	Iter: [10/400]	Loss 0.91424 (0.94089)	
+[2025-01-28 12:08:01,274][       train.py][line: 186][    INFO] (brainmri): Epoch: 5, image auroc: 0.7294,
+[2025-01-28 12:08:01,275][       train.py][line: 201][    INFO] (brainmri best): image auroc: 0.7294,
+[2025-01-28 12:08:01,275][       train.py][line: 208][    INFO] save checkpoints in epoch: 5
