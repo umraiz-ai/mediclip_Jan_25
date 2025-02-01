@@ -3,7 +3,7 @@ import torch
 import yaml
 from easydict import EasyDict
 from models.Necker import Necker
-
+import torch.nn.functional as F
 import math
 import argparse
 import warnings
@@ -82,7 +82,7 @@ def main(args):
         class_token_position=args.config.class_token_positions,
     ).to(model.device)
 
-    map_maker = MapMaker(image_size=args.config.image_size).to(model.device)
+    map_maker = MapMaker(image_size=args.config.image_size, vision_channels=args.config.model_cfg['vision_cfg']['width']).to(model.device)
 
     optimizer = torch.optim.Adam([
             {'params': prompt_maker.prompt_learner.parameters(),'lr': 0.001},
@@ -235,7 +235,8 @@ def train_one_epoch(
         curr_step = start_iter + i
 
         images = input['image'].to(clip_model.device)
-        gt_mask = input['mask'].to(clip_model.device)
+        gt_mask = input['mask'].squeeze(1).to(clip_model.device)  # Shape: [8,224,224]
+        
 
         with torch.no_grad():
             _, image_tokens = clip_model.encode_image(images,out_layers=args.config.layers_out)
@@ -246,10 +247,11 @@ def train_one_epoch(
 
         # Keep rest of pipeline unchanged
         vision_features = image_features
-        prompt_features = prompt_maker(vision_features)
+        prompt_features = prompt_maker(vision_features).t()
         print("Prompt features shape:", prompt_features.shape)
-
-        anomaly_map = map_maker(vision_features,prompt_features)
+                # Split the batch into a list of individual tensors
+        anomaly_map = map_maker(vision_features, prompt_features)  # [8, 2, 224, 224]
+        
         loss = []
 
         loss.append(focal_criterion(anomaly_map,gt_mask))
@@ -301,7 +303,7 @@ def validate(args, test_dataloaders, epoch, clip_model, necker, prompt_maker, ma
                 image_features = necker(image_tokens)
                 processed_features = image_features
                 prompt_features = prompt_maker(processed_features)
-                anomaly_map = map_maker(processed_features, prompt_features)
+                anomaly_map = map_maker([processed_features], prompt_features)
 
                 B,_,H,W = anomaly_map.shape
 

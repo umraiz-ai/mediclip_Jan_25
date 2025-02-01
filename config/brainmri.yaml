@@ -12,8 +12,8 @@ print_freq_step: 10
 val_freq_epoch: 1
 
 image_size: 224
-model_name: RN101
-layers_out: [1, 2, 3, 4]
+model_name: ViT-L-14
+layers_out: [12, 18, 24]
 
 anomaly_tasks:
   CutpasteTask: 0.25
