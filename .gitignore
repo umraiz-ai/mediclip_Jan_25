@@ -1,2 +1,6 @@
 results/
+results/*
+
 vis_results/
+
+vis_results/*

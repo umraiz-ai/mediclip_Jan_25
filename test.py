@@ -4,6 +4,7 @@ import torch
 import yaml
 from easydict import EasyDict
 from models.Necker import Necker
+from models.Adapter import Adapter
 import math
 import argparse
 import warnings
@@ -21,18 +22,6 @@ import cv2
 warnings.filterwarnings('ignore')
 
 def normalization(segmentations, image_size, avgpool_size = 128):
-    """
-    Normalize the segmentations of an image.
-
-    Args:
-        segmentations (numpy.ndarray): Array of segmentations with shape (N, H, W).
-        image_size (int): Desired size of the image.
-        avgpool_size (int, optional): Size of the average pooling window. Defaults to 128.
-
-    Returns:
-        numpy.ndarray: Normalized segmentations with shape (H, W).
-
-    """
 
     segmentations = torch.tensor(segmentations[:, None, ...]).cuda()  # N x 1 x H x W
     segmentations = F.interpolate(segmentations,(image_size, image_size), mode='bilinear', align_corners=True)
@@ -96,6 +85,8 @@ def main(args):
                             args.config.layers_out)
 
     necker = Necker(clip_model=model).to(model.device)
+    adapter = Adapter(clip_model=model,target=args.config.model_cfg['embed_dim']).to(model.device)
+
     if args.config.prompt_maker=='coop':
         from models.CoOp import PromptMaker
     else:
@@ -113,9 +104,10 @@ def main(args):
 
 
     checkpoints = torch.load(args.checkpoint_path,map_location=map_func)
+    adapter.load_state_dict(checkpoints['adapter_state_dict'])
     prompt_maker.prompt_learner.load_state_dict(checkpoints['prompt_state_dict'])
     prompt_maker.prompt_learner.eval()
-
+    adapter.eval()
 
     for test_dataset_name in args.config.test_datasets:
 
@@ -143,7 +135,7 @@ def main(args):
             raise NotImplementedError("dataset must in ['chexpert','busi','brainmri'] ")
 
         test_dataloader = DataLoader(test_dataset, batch_size=args.config.batch_size,num_workers=2)
-        results = validate(args,test_dataset_name,test_dataloader,model,necker,prompt_maker,map_maker)
+        results = validate(args,test_dataset_name,test_dataloader,model,necker,adapter,prompt_maker,map_maker)
 
         if test_dataset_name!='busi':
             print("{}, image auroc: {:.4f}".format(test_dataset_name, results["image-auroc"]))
@@ -151,7 +143,7 @@ def main(args):
             print("{}, image auroc: {:.4f}, pixel_auroc: {:.4f}".format(test_dataset_name, results["image-auroc"],results['pixel-auroc']))
 
 
-def validate(args, dataset_name, test_dataloader, clip_model, necker, prompt_maker, map_maker):
+def validate(args, dataset_name, test_dataloader, clip_model, necker, adapter, prompt_maker, map_maker):
 
     image_preds = []
     image_gts= []
@@ -168,7 +160,7 @@ def validate(args, dataset_name, test_dataloader, clip_model, necker, prompt_mak
 
         _, image_tokens = clip_model.encode_image(images, out_layers=args.config.layers_out)
         image_features = necker(image_tokens)
-        vision_adapter_features = image_features
+        vision_adapter_features = adapter(image_features)
         propmt_adapter_features = prompt_maker(vision_adapter_features)
         anomaly_map = map_maker(vision_adapter_features, propmt_adapter_features)
 
@@ -247,4 +239,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
     torch.multiprocessing.set_start_method("spawn")
     main(args)
-

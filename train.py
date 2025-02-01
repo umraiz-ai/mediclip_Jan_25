@@ -3,7 +3,7 @@ import torch
 import yaml
 from easydict import EasyDict
 from models.Necker import Necker
-import torch.nn.functional as F
+from models.Adapter import Adapter
 import math
 import argparse
 import warnings
@@ -67,7 +67,8 @@ def main(args):
     logger.info("config: {}".format(pprint.pformat(args)))
 
     necker = Necker(clip_model=model).to(model.device)
-    
+    adapter = Adapter(clip_model=model,target=args.config.model_cfg['embed_dim']).to(model.device)
+
     if args.config.prompt_maker=='coop':
         from models.CoOp import PromptMaker
         logger.info("load CoOp")
@@ -82,11 +83,11 @@ def main(args):
         class_token_position=args.config.class_token_positions,
     ).to(model.device)
 
-    map_maker = MapMaker(image_size=args.config.image_size, vision_channels=args.config.model_cfg['vision_cfg']['width']).to(model.device)
+    map_maker = MapMaker(image_size=args.config.image_size).to(model.device)
 
     optimizer = torch.optim.Adam([
             {'params': prompt_maker.prompt_learner.parameters(),'lr': 0.001},
-            
+            {'params': adapter.parameters(),"lr":0.001},
         ], lr=0.001, betas=(0.5, 0.999))
 
     train_dataset = TrainDataset(args=args.config,
@@ -147,13 +148,14 @@ def main(args):
             logger,
             model,
             necker,
+            adapter,
             prompt_maker,
             map_maker,
         )
 
         if (epoch+1) % args.config.val_freq_epoch == 0:
 
-            results = validate(args,test_dataloaders, epoch,model, necker,prompt_maker,map_maker)
+            results = validate(args,test_dataloaders, epoch,model, necker,adapter,prompt_maker,map_maker)
             save_flag = False
 
             for test_dataset_name in results:
@@ -205,7 +207,7 @@ def main(args):
             if save_flag:
                 logger.info("save checkpoints in epoch: {}".format(epoch+1))
                 torch.save({
-                        
+                        "adapter_state_dict": adapter.state_dict(),
                         "prompt_state_dict": prompt_maker.prompt_learner.state_dict(),
                     }, os.path.join(args.config.save_root, 'checkpoints_{}.pkl'.format(epoch + 1)))
 
@@ -219,6 +221,7 @@ def train_one_epoch(
             logger,
             clip_model,
             necker,
+            adapter,
             prompt_maker,
             map_maker,
 ):
@@ -228,30 +231,23 @@ def train_one_epoch(
     focal_criterion = FocalLoss()
     dice_criterion = BinaryDiceLoss()
 
-    
+    adapter.train()
     prompt_maker.train()
 
     for i, input in enumerate(train_dataloader):
         curr_step = start_iter + i
 
         images = input['image'].to(clip_model.device)
-        gt_mask = input['mask'].squeeze(1).to(clip_model.device)  # Shape: [8,224,224]
-        
+        gt_mask = input['mask'].to(clip_model.device)
 
         with torch.no_grad():
             _, image_tokens = clip_model.encode_image(images,out_layers=args.config.layers_out)
-            # Change here: Convert list to tensor
-            image_features_list = necker(image_tokens)
-            image_features = torch.cat(image_features_list, dim=1)
-            print("Image features shape:", image_features.shape)
+            image_features = necker(image_tokens)
 
-        # Keep rest of pipeline unchanged
-        vision_features = image_features
-        prompt_features = prompt_maker(vision_features).t()
-        print("Prompt features shape:", prompt_features.shape)
-                # Split the batch into a list of individual tensors
-        anomaly_map = map_maker(vision_features, prompt_features)  # [8, 2, 224, 224]
-        
+        vision_adapter_features = adapter(image_features)
+        propmt_adapter_features = prompt_maker(vision_adapter_features)
+        anomaly_map = map_maker(vision_adapter_features,propmt_adapter_features)
+
         loss = []
 
         loss.append(focal_criterion(anomaly_map,gt_mask))
@@ -279,9 +275,9 @@ def train_one_epoch(
             )
 
 
-def validate(args, test_dataloaders, epoch, clip_model, necker, prompt_maker, map_maker):
+def validate(args, test_dataloaders, epoch, clip_model, necker, adapter, prompt_maker, map_maker):
 
-    
+    adapter.eval()
     prompt_maker.eval()
     results = {}
 
@@ -301,9 +297,9 @@ def validate(args, test_dataloaders, epoch, clip_model, necker, prompt_maker, ma
 
                 _, image_tokens = clip_model.encode_image(images, out_layers=args.config.layers_out)
                 image_features = necker(image_tokens)
-                processed_features = image_features
-                prompt_features = prompt_maker(processed_features)
-                anomaly_map = map_maker([processed_features], prompt_features)
+                vision_adapter_features = adapter(image_features)
+                propmt_adapter_features = prompt_maker(vision_adapter_features)
+                anomaly_map = map_maker(vision_adapter_features, propmt_adapter_features)
 
                 B,_,H,W = anomaly_map.shape
 
