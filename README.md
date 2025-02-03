@@ -1,6 +1,6 @@
 This code version runs perfectly with changed Necker.py file.
 Now primarily two files are changed in this branch.
-Adapter and Necker.py. The training started from 0.8825 AUROC in the first 3 epochs.
+Adapter and Necker.py. The training 0.9328, AUROC 
 But later on never exceeded it.
 
 
@@ -14,8 +14,19 @@ This what
 ```python
 
 ### Key Improvements:
-1. Temperature-scaled layer weights
-2. Feature refinement blocks with residual connections
-3. Channel-wise attention mechanism
-4. Skip connections between layers
-5. Enhanced upsampling with conv+BN+ReLU
+### Step-by-Step Plan to Improve AUROC
+
+1. **Feature Enhancement Steps**
+- Add spatial attention
+- Implement feature pyramid
+- Add residual connections
+- Include channel-wise calibration
+- Maintain dimensionality
+
+
+Key Changes:
+- Spatial attention instead of self-attention
+- Pyramid feature refinement
+- Residual connections between layers
+- No layer weights (simpler approach)
+- Maintained original dimensions

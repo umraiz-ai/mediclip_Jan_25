@@ -93,20 +93,18 @@ import torch.nn.functional as F
 #         return align_features
 
 
-
-
-class FeatureRefinement(nn.Module):
-    def __init__(self, channels):
+class SpatialAttention(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(channels)
-        self.conv2 = nn.Conv2d(channels, channels, 1)
+        self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3)
         
     def forward(self, x):
-        residual = x
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = self.conv2(x)
-        return F.relu(x + residual)
+        # Spatial attention
+        avg_pool = torch.mean(x, dim=1, keepdim=True)
+        max_pool = torch.max(x, dim=1, keepdim=True)[0]
+        attention = torch.cat([avg_pool, max_pool], dim=1)
+        attention = torch.sigmoid(self.conv(attention))
+        return x * attention
 
 class Necker(nn.Module):
     def __init__(self, clip_model):
@@ -114,63 +112,54 @@ class Necker(nn.Module):
         self.clip_model = clip_model
         target = max(self.clip_model.token_size)
         
-        # Learnable temperature parameter
-        self.temperature = nn.Parameter(torch.ones(1) * 0.07)
-        self.layer_weights = nn.Parameter(torch.ones(len(self.clip_model.token_size)))
+        # Feature pyramid levels
+        self.levels = len(self.clip_model.token_size)
         
         for i, size in enumerate(self.clip_model.token_size):
-            # Enhanced upsampling
-            self.add_module(f"{i}_upsample", nn.Sequential(
-                nn.UpsamplingBilinear2d(scale_factor=target/size),
-                nn.Conv2d(self.clip_model.token_c[i], self.clip_model.token_c[i], 1),
+            # Base upsampling
+            self.add_module(f"{i}_upsample", 
+                nn.UpsamplingBilinear2d(scale_factor=target/size))
+            
+            # Spatial attention
+            self.add_module(f"{i}_spatial_attn", 
+                SpatialAttention())
+            
+            # Feature refinement
+            self.add_module(f"{i}_refine", nn.Sequential(
+                nn.Conv2d(self.clip_model.token_c[i], 
+                         self.clip_model.token_c[i],
+                         kernel_size=3, padding=1),
                 nn.BatchNorm2d(self.clip_model.token_c[i]),
                 nn.ReLU()
             ))
             
-            # Layer normalization
-            self.add_module(f"{i}_norm", nn.LayerNorm(self.clip_model.token_c[i]))
-            
-            # Feature refinement
-            self.add_module(f"{i}_refine", FeatureRefinement(self.clip_model.token_c[i]))
-            
-            # Channel attention weights
-            self.add_module(f"{i}_channel_weights", nn.Sequential(
-                nn.AdaptiveAvgPool2d(1),
-                nn.Conv2d(self.clip_model.token_c[i], self.clip_model.token_c[i], 1),
-                nn.Sigmoid()
-            ))
-
     @torch.no_grad()
     def forward(self, tokens):
         align_features = []
-        weights = F.softmax(self.layer_weights / self.temperature, dim=0)
+        prev_feat = None
         
-        prev_feature = None
         for i, token in enumerate(tokens):
             if len(token.shape) == 3:
                 B, N, C = token.shape
-                # Layer norm
-                token = getattr(self, f"{i}_norm")(token)
                 # Remove CLS and reshape
                 token = token[:, 1:, :]
                 token = token.view((B, int(math.sqrt(N-1)), 
                                  int(math.sqrt(N-1)), C)).permute(0, 3, 1, 2)
                 
+                # Apply spatial attention
+                token = getattr(self, f"{i}_spatial_attn")(token)
+                
                 # Feature refinement
-                token = getattr(self, f"{i}_refine")(token)
+                refined = getattr(self, f"{i}_refine")(token)
                 
-                # Channel attention
-                channel_weights = getattr(self, f"{i}_channel_weights")(token)
-                token = token * channel_weights
+                # Residual connection
+                if prev_feat is not None and prev_feat.shape[2:] == refined.shape[2:]:
+                    refined = refined + prev_feat
                 
-                # Skip connection with previous feature if available
-                if prev_feature is not None and prev_feature.shape[2:] == token.shape[2:]:
-                    token = token + prev_feature
+                # Upsampling
+                token = getattr(self, f"{i}_upsample")(refined)
+                prev_feat = token
                 
-                # Upsample
-                token = getattr(self, f"{i}_upsample")(token)
-                prev_feature = token
-                
-            align_features.append(token * weights[i])
-        
+            align_features.append(token)
+            
         return align_features
