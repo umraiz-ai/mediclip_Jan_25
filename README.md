@@ -1,36 +1,32 @@
 This code version runs perfectly with changed Necker.py file.
 Now primarily two files are changed in this branch.
-Adapter and Necker.py. The training 0.9547, AUROC 
+Adapter and Necker.py. The training .9438, AUROC 
 
 
 
 This is what is included in Necker.py
 This what 
 
-### Plan for AUROC Improvements
+### Plan for Error-Free Implementation
 
-### Plan for Enhanced Necker Implementation
+1. **Analyze Error**
+- Channel mismatch in MultiScaleFusion
+- Input: 768 channels
+- Expected: 1024 channels
 
-1. **Feature Extraction**
-- Add multi-scale feature aggregation
-- Implement feature pyramid network
-- Add skip connections
-
-2. **Token Processing**
-- Enhanced token mixing
-- Multi-head attention
-- Cross-layer interaction
-
-3. **Feature Refinement**
-- Add residual blocks
-- Scale calibration
-- Channel-wise attention
+2. **Fix Steps**
+- Use input channel size for convolutions
+- Maintain channel dimensions through operations
+- Validate dimensions before concatenation
 
 ```python
 
 
-Key improvements:
-- Multi-scale feature extraction
-- Adaptive feature calibration
-- Enhanced fusion strategy
-- Pyramid feature network structure
+python train.py --config_path config/brainmri.yaml
+```
+
+Key fixes:
+- Corrected channel dimensions in MultiScaleFusion
+- Used input channel size throughout
+- Maintained channel consistency in all operations
+- Added proper dimension checks
