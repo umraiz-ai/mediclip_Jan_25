@@ -93,19 +93,17 @@ import torch.nn.functional as F
 #         return align_features
 
 
-
-class ScaleFeatureEnhancement(nn.Module):
-    def __init__(self, channels):
+class RegionAwareModule(nn.Module):
+    def __init__(self, in_channels):
         super().__init__()
-        self.scale_conv = nn.Sequential(
-            nn.Conv2d(channels, channels, 1),
-            nn.BatchNorm2d(channels),
-            nn.ReLU(inplace=True)
-        )
-        self.calibration = nn.Parameter(torch.ones(1))
+        self.conv1 = nn.Conv2d(1, 1, kernel_size=7, padding=3)
+        self.scale = nn.Parameter(torch.ones(1))
         
     def forward(self, x):
-        return x + self.calibration * self.scale_conv(x)
+        # Spatial attention map
+        spatial_map = torch.mean(x, dim=1, keepdim=True)
+        attention = torch.sigmoid(self.conv1(spatial_map))
+        return x * (attention * self.scale)
 
 class Necker(nn.Module):
     def __init__(self, clip_model):
@@ -113,11 +111,12 @@ class Necker(nn.Module):
         self.clip_model = clip_model
         target = max(self.clip_model.token_size)
         
-        # Adaptive mixing weights
-        self.mixing_weights = nn.Parameter(torch.ones(len(self.clip_model.token_size)))
-        
         for i, size in enumerate(self.clip_model.token_size):
-            # Enhanced upsampling
+            # Region-aware module
+            self.add_module(f"{i}_region", 
+                          RegionAwareModule(self.clip_model.token_c[i]))
+            
+            # Basic upsampling with refinement
             self.add_module(f"{i}_upsample", 
                 nn.Sequential(
                     nn.UpsamplingBilinear2d(scale_factor=target/size),
@@ -126,32 +125,23 @@ class Necker(nn.Module):
                     nn.BatchNorm2d(self.clip_model.token_c[i]),
                     nn.ReLU(inplace=True)
                 ))
-            
-            # Scale enhancement
-            self.add_module(f"{i}_enhance",
-                ScaleFeatureEnhancement(self.clip_model.token_c[i]))
     
     @torch.no_grad()
     def forward(self, tokens):
         align_features = []
-        weights = F.softmax(self.mixing_weights, dim=0)
         
         for i, token in enumerate(tokens):
             if len(token.shape) == 3:
                 B, N, C = token.shape
-                # Remove CLS token
                 token = token[:, 1:, :]
-                # Reshape to spatial
                 token = token.view((B, int(math.sqrt(N-1)), 
                                   int(math.sqrt(N-1)), C)).permute(0, 3, 1, 2)
                 
-                # Apply enhancement
-                token = getattr(self, f"{i}_enhance")(token)
-                
-                # Enhanced upsampling
+                # Region-aware processing
+                token = getattr(self, f"{i}_region")(token)
+                # Upsampling
                 token = getattr(self, f"{i}_upsample")(token)
                 
-            # Apply adaptive mixing
-            align_features.append(token * weights[i])
+            align_features.append(token)
         
         return align_features

@@ -1,6 +1,6 @@
 This code version runs perfectly with changed Necker.py file.
 Now primarily two files are changed in this branch.
-Adapter and Necker.py. The training 0.9328, AUROC 
+Adapter and Necker.py. The training 0.9291, AUROC 
 But later on never exceeded it.
 
 
@@ -15,6 +15,12 @@ This what
 
 ### Key Improvements:
 ### Step-by-Step Plan to Improve AUROC
+### Plan for AUROC Improvements in 
+
+Necker.py
+
+
+
 ### Plan for AUROC Improvements in 
 
 Necker.py
@@ -37,8 +43,6 @@ Necker.py
 - Scale-wise feature enhancement
 - Learnable fusion weights
 - Lightweight refinement blocks
-
-```python
 
 
 4. **Key Changes**
