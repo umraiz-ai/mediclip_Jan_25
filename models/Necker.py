@@ -93,18 +93,19 @@ import torch.nn.functional as F
 #         return align_features
 
 
+
 class PyramidFeatureModule(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.conv1x1 = nn.Conv2d(in_channels, in_channels, 1)
-        self.conv3x3 = nn.Conv2d(in_channels, in_channels, 3, padding=1)
+        self.conv1 = nn.Conv2d(in_channels, in_channels, 3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels, in_channels, 1)
         self.bn = nn.BatchNorm2d(in_channels)
         self.scale = nn.Parameter(torch.ones(1))
         
     def forward(self, x):
         identity = x
-        out = self.conv1x1(x)
-        out = self.conv3x3(out)
+        out = self.conv1(x)
+        out = self.conv2(out)
         out = self.bn(out)
         return F.relu(identity + self.scale * out)
 
@@ -113,9 +114,9 @@ class FeatureCalibration(nn.Module):
         super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
-            nn.Linear(channels, channels // 16),
+            nn.Linear(channels, channels // 8),
             nn.ReLU(),
-            nn.Linear(channels // 16, channels),
+            nn.Linear(channels // 8, channels),
             nn.Sigmoid()
         )
         
@@ -131,19 +132,21 @@ class Necker(nn.Module):
         self.clip_model = clip_model
         target = max(self.clip_model.token_size)
         
-        # Feature pyramid
         for i, size in enumerate(self.clip_model.token_size):
+            # Pyramid features
             self.add_module(f"{i}_pyramid", 
                           PyramidFeatureModule(self.clip_model.token_c[i]))
             
+            # Feature calibration
             self.add_module(f"{i}_calibrate", 
                           FeatureCalibration(self.clip_model.token_c[i]))
             
+            # Enhanced upsampling
             self.add_module(f"{i}_upsample", 
                 nn.Sequential(
                     nn.UpsamplingBilinear2d(scale_factor=target/size),
                     nn.Conv2d(self.clip_model.token_c[i], 
-                             self.clip_model.token_c[i], 1),
+                             self.clip_model.token_c[i], 3, padding=1),
                     nn.BatchNorm2d(self.clip_model.token_c[i]),
                     nn.ReLU(inplace=True)
                 ))
@@ -162,13 +165,9 @@ class Necker(nn.Module):
                 token = token.view((B, int(math.sqrt(N-1)), 
                                   int(math.sqrt(N-1)), C)).permute(0, 3, 1, 2)
                 
-                # Feature pyramid
+                # Multi-scale feature enhancement
                 token = getattr(self, f"{i}_pyramid")(token)
-                
-                # Feature calibration
                 token = getattr(self, f"{i}_calibrate")(token)
-                
-                # Enhanced upsampling
                 token = getattr(self, f"{i}_upsample")(token)
                 
             align_features.append(token * weights[i])
