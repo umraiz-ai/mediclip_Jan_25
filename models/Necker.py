@@ -93,73 +93,65 @@ import torch.nn.functional as F
 #         return align_features
 
 
-class SpatialAttention(nn.Module):
-    def __init__(self):
+
+class ScaleFeatureEnhancement(nn.Module):
+    def __init__(self, channels):
         super().__init__()
-        self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3)
+        self.scale_conv = nn.Sequential(
+            nn.Conv2d(channels, channels, 1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True)
+        )
+        self.calibration = nn.Parameter(torch.ones(1))
         
     def forward(self, x):
-        # Spatial attention
-        avg_pool = torch.mean(x, dim=1, keepdim=True)
-        max_pool = torch.max(x, dim=1, keepdim=True)[0]
-        attention = torch.cat([avg_pool, max_pool], dim=1)
-        attention = torch.sigmoid(self.conv(attention))
-        return x * attention
+        return x + self.calibration * self.scale_conv(x)
 
 class Necker(nn.Module):
     def __init__(self, clip_model):
-        super(Necker, self).__init__()
+        super().__init__()
         self.clip_model = clip_model
         target = max(self.clip_model.token_size)
         
-        # Feature pyramid levels
-        self.levels = len(self.clip_model.token_size)
+        # Adaptive mixing weights
+        self.mixing_weights = nn.Parameter(torch.ones(len(self.clip_model.token_size)))
         
         for i, size in enumerate(self.clip_model.token_size):
-            # Base upsampling
+            # Enhanced upsampling
             self.add_module(f"{i}_upsample", 
-                nn.UpsamplingBilinear2d(scale_factor=target/size))
+                nn.Sequential(
+                    nn.UpsamplingBilinear2d(scale_factor=target/size),
+                    nn.Conv2d(self.clip_model.token_c[i], 
+                             self.clip_model.token_c[i], 1),
+                    nn.BatchNorm2d(self.clip_model.token_c[i]),
+                    nn.ReLU(inplace=True)
+                ))
             
-            # Spatial attention
-            self.add_module(f"{i}_spatial_attn", 
-                SpatialAttention())
-            
-            # Feature refinement
-            self.add_module(f"{i}_refine", nn.Sequential(
-                nn.Conv2d(self.clip_model.token_c[i], 
-                         self.clip_model.token_c[i],
-                         kernel_size=3, padding=1),
-                nn.BatchNorm2d(self.clip_model.token_c[i]),
-                nn.ReLU()
-            ))
-            
+            # Scale enhancement
+            self.add_module(f"{i}_enhance",
+                ScaleFeatureEnhancement(self.clip_model.token_c[i]))
+    
     @torch.no_grad()
     def forward(self, tokens):
         align_features = []
-        prev_feat = None
+        weights = F.softmax(self.mixing_weights, dim=0)
         
         for i, token in enumerate(tokens):
             if len(token.shape) == 3:
                 B, N, C = token.shape
-                # Remove CLS and reshape
+                # Remove CLS token
                 token = token[:, 1:, :]
+                # Reshape to spatial
                 token = token.view((B, int(math.sqrt(N-1)), 
-                                 int(math.sqrt(N-1)), C)).permute(0, 3, 1, 2)
+                                  int(math.sqrt(N-1)), C)).permute(0, 3, 1, 2)
                 
-                # Apply spatial attention
-                token = getattr(self, f"{i}_spatial_attn")(token)
+                # Apply enhancement
+                token = getattr(self, f"{i}_enhance")(token)
                 
-                # Feature refinement
-                refined = getattr(self, f"{i}_refine")(token)
+                # Enhanced upsampling
+                token = getattr(self, f"{i}_upsample")(token)
                 
-                # Residual connection
-                if prev_feat is not None and prev_feat.shape[2:] == refined.shape[2:]:
-                    refined = refined + prev_feat
-                
-                # Upsampling
-                token = getattr(self, f"{i}_upsample")(refined)
-                prev_feat = token
-                
-            align_features.append(token)
-            
+            # Apply adaptive mixing
+            align_features.append(token * weights[i])
+        
         return align_features
