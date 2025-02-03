@@ -93,17 +93,37 @@ import torch.nn.functional as F
 #         return align_features
 
 
-class RegionAwareModule(nn.Module):
+class PyramidFeatureModule(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 1, kernel_size=7, padding=3)
+        self.conv1x1 = nn.Conv2d(in_channels, in_channels, 1)
+        self.conv3x3 = nn.Conv2d(in_channels, in_channels, 3, padding=1)
+        self.bn = nn.BatchNorm2d(in_channels)
         self.scale = nn.Parameter(torch.ones(1))
         
     def forward(self, x):
-        # Spatial attention map
-        spatial_map = torch.mean(x, dim=1, keepdim=True)
-        attention = torch.sigmoid(self.conv1(spatial_map))
-        return x * (attention * self.scale)
+        identity = x
+        out = self.conv1x1(x)
+        out = self.conv3x3(out)
+        out = self.bn(out)
+        return F.relu(identity + self.scale * out)
+
+class FeatureCalibration(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, channels // 16),
+            nn.ReLU(),
+            nn.Linear(channels // 16, channels),
+            nn.Sigmoid()
+        )
+        
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
 
 class Necker(nn.Module):
     def __init__(self, clip_model):
@@ -111,12 +131,14 @@ class Necker(nn.Module):
         self.clip_model = clip_model
         target = max(self.clip_model.token_size)
         
+        # Feature pyramid
         for i, size in enumerate(self.clip_model.token_size):
-            # Region-aware module
-            self.add_module(f"{i}_region", 
-                          RegionAwareModule(self.clip_model.token_c[i]))
+            self.add_module(f"{i}_pyramid", 
+                          PyramidFeatureModule(self.clip_model.token_c[i]))
             
-            # Basic upsampling with refinement
+            self.add_module(f"{i}_calibrate", 
+                          FeatureCalibration(self.clip_model.token_c[i]))
+            
             self.add_module(f"{i}_upsample", 
                 nn.Sequential(
                     nn.UpsamplingBilinear2d(scale_factor=target/size),
@@ -125,10 +147,13 @@ class Necker(nn.Module):
                     nn.BatchNorm2d(self.clip_model.token_c[i]),
                     nn.ReLU(inplace=True)
                 ))
+        
+        self.fusion_weights = nn.Parameter(torch.ones(len(self.clip_model.token_size)))
     
     @torch.no_grad()
     def forward(self, tokens):
         align_features = []
+        weights = F.softmax(self.fusion_weights, dim=0)
         
         for i, token in enumerate(tokens):
             if len(token.shape) == 3:
@@ -137,11 +162,15 @@ class Necker(nn.Module):
                 token = token.view((B, int(math.sqrt(N-1)), 
                                   int(math.sqrt(N-1)), C)).permute(0, 3, 1, 2)
                 
-                # Region-aware processing
-                token = getattr(self, f"{i}_region")(token)
-                # Upsampling
+                # Feature pyramid
+                token = getattr(self, f"{i}_pyramid")(token)
+                
+                # Feature calibration
+                token = getattr(self, f"{i}_calibrate")(token)
+                
+                # Enhanced upsampling
                 token = getattr(self, f"{i}_upsample")(token)
                 
-            align_features.append(token)
+            align_features.append(token * weights[i])
         
         return align_features
