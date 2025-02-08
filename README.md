@@ -3,7 +3,7 @@ Now primarily two files are changed in this branch.
 Adapter and Necker.py. The training .9485, AUROC 
 
 this repo has updated adapter. updated Necker and updated CoOp.py file.
-
+This is the implementation of the CoCoOp. 
 
 
 Especially CoOp.py
