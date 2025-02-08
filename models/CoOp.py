@@ -200,20 +200,16 @@ class TextEncoder(nn.Module):
 #         text_features = torch.stack(text_features, dim=1)
 #         return text_features
 
+
+
 class PromptLearner(nn.Module):
-    def __init__(self, prompts, n_ctx, CSC, class_token_position, clip_model, condition_dim=512):
-        """
-        Initialize PromptLearner with conditional prompt learning support
-        """
+    def __init__(self, prompts, n_ctx, CSC, class_token_position, clip_model):
         super().__init__()
         
-        # 1. Setup context dimension from CLIP model
+        # Get context dimension from CLIP model
         ctx_dim = clip_model.ln_final.weight.shape[0]
         
-        # 2. Initialize condition embedding layer
-        self.condition_embedding = nn.Linear(condition_dim, ctx_dim)
-        
-        # 3. Initialize learnable context vectors
+        # Initialize context vectors
         self.ctx = {}
         for cls in prompts:
             for position in class_token_position:
@@ -224,63 +220,56 @@ class PromptLearner(nn.Module):
                 nn.init.normal_(ctx_vectors, std=0.02)
                 self.ctx['{}_{}'.format(cls,position)] = nn.Parameter(ctx_vectors, requires_grad=True)
         
-        # 4. Convert ctx to ParameterDict for optimization
         self.ctx = nn.ParameterDict(self.ctx)
         
-        # 5. Process prompts and tokenization
+        # Process prompts
         prompt_prefix = " ".join(["X"] * n_ctx)
         _tokenizer = SimpleTokenizer()
         
         # Split and process prompts
         prompts_split = {cls: [prompt.replace("_", " ") for prompt in prompts[cls]] for cls in prompts}
         prompts_lens = {cls: [len(_tokenizer.encode(prompt)) for prompt in prompts_split[cls]] for cls in prompts_split}
-        
-        # Create learnable token sequences
         prompts_learnable_tokens = {cls:[prompt_prefix + " " + prompt + "." for prompt in prompts_split[cls]] for cls in prompts_split}
         
-        # Tokenize all prompts
+        # Tokenize prompts
         tokenized_prompts = {cls:torch.cat([tokenize(prompt) for prompt in prompts_learnable_tokens[cls]]).to(clip_model.device) for cls in prompts_learnable_tokens}
         
-        # 6. Get and register embeddings
+        # Get embeddings
         with torch.no_grad():
             embeddings = {cls:clip_model.token_embedding(tokenized_prompts[cls]) for cls in tokenized_prompts}
         
+        # Register embeddings
         self.register_embeddings = {}
         for cls in embeddings:
             self.register_embeddings['{}_token_prefix'.format(cls)] = embeddings[cls][:, :1, :]
             self.register_embeddings['{}_token_suffix'.format(cls)] = embeddings[cls][:, 1 + n_ctx:, :]
         
-        # 7. Store necessary attributes
         self.n_ctx = n_ctx
         self.tokenized_prompts = tokenized_prompts
         self.prompts_lens = prompts_lens
         self.class_token_position = class_token_position
 
-    def forward(self, condition=None):
+    def forward(self):
         cls_prompts = {}
-        condition_embed = None
-        if condition is not None:
-            condition_embed = self.condition_embedding(condition)
-
+        
         for cls in self.tokenized_prompts:
             prefix = self.register_embeddings['{}_token_prefix'.format(cls)]
             suffix = self.register_embeddings['{}_token_suffix'.format(cls)]
             cls_prompts[cls] = []
-
+            
             for position in self.class_token_position:
                 ctx = self.ctx['{}_{}'.format(cls,position)]
                 
-                if condition_embed is not None:
-                    if ctx.dim() == 2:
-                        ctx = ctx + condition_embed.unsqueeze(0)
-                    else:
-                        ctx = ctx + condition_embed.unsqueeze(0).unsqueeze(0)
-
                 if ctx.dim() == 2:
                     ctx = ctx.unsqueeze(0).expand(len(self.prompts_lens[cls]), -1, -1)
-
+                
                 if position == "end":
-                    prompts = torch.cat([prefix, ctx, suffix], dim=1)
+                    prompts = torch.cat([
+                        prefix,
+                        ctx,
+                        suffix,
+                    ], dim=1)
+                
                 elif position == "middle":
                     half_n_ctx = self.n_ctx // 2
                     prompts = []
@@ -291,9 +280,16 @@ class PromptLearner(nn.Module):
                         suffix_i = suffix[i:i+1, p_len:, :]
                         ctx_i_half1 = ctx[i:i+1, :half_n_ctx, :]
                         ctx_i_half2 = ctx[i:i+1, half_n_ctx:, :]
-                        prompt = torch.cat([prefix_i, ctx_i_half1, class_i, ctx_i_half2, suffix_i], dim=1)
+                        prompt = torch.cat([
+                            prefix_i,
+                            ctx_i_half1,
+                            class_i,
+                            ctx_i_half2,
+                            suffix_i,
+                        ], dim=1)
                         prompts.append(prompt)
                     prompts = torch.cat(prompts, dim=0)
+                
                 else:
                     prompts = []
                     for i in range(len(self.prompts_lens[cls])):
@@ -302,37 +298,121 @@ class PromptLearner(nn.Module):
                         class_i = suffix[i:i+1, :p_len, :]
                         suffix_i = suffix[i:i+1, p_len:, :]
                         ctx_i = ctx[i:i+1, :, :]
-                        prompt = torch.cat([prefix_i, class_i, ctx_i, suffix_i], dim=1)
+                        prompt = torch.cat([
+                            prefix_i,
+                            class_i,
+                            ctx_i,
+                            suffix_i,
+                        ], dim=1)
                         prompts.append(prompt)
                     prompts = torch.cat(prompts, dim=0)
-
+                
                 cls_prompts[cls].append(prompts)
             cls_prompts[cls] = torch.cat(cls_prompts[cls], dim=0)
+        
         return cls_prompts
 
+
+
+
+class VPTLayer(nn.Module):
+    def __init__(self, input_dim, prompt_dim, prompt_length):
+        super().__init__()
+        self.prompt_length = prompt_length
+        self.visual_prompt = nn.Parameter(torch.randn(prompt_length, prompt_dim))
+        self.prompt_proj = nn.Linear(input_dim, prompt_dim)
+        self.layer_norm = nn.LayerNorm(prompt_dim)
+    
+    def forward(self, x):
+        B, L, D = x.shape
+        prompt = self.visual_prompt.expand(B, -1, -1)
+        x_proj = self.prompt_proj(x)
+        x_with_prompt = torch.cat([prompt, x_proj], dim=1)
+        return self.layer_norm(x_with_prompt)
+
+class VisualPromptTuner(nn.Module):
+    def __init__(self, clip_model, prompt_length=10):
+        super().__init__()
+        
+        vision_width = clip_model.visual.conv1.out_channels
+        vision_layers = len(clip_model.visual.transformer.resblocks)
+        
+        self.vpt_layers = nn.ModuleList([
+            VPTLayer(
+                input_dim=vision_width,
+                prompt_dim=vision_width,
+                prompt_length=prompt_length
+            ) for _ in range(vision_layers)
+        ])
+        
+        self.original_forward = clip_model.visual.forward
+        self.prompt_length = prompt_length
+        
+    def forward(self, x):
+        x = self.original_forward.conv1(x)  # shape = [*, width, grid, grid]
+        x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+        x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+        x = torch.cat([self.original_forward.class_embedding.to(x.dtype) + 
+                      torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)
+        x = x + self.original_forward.positional_embedding.to(x.dtype)
+        x = self.original_forward.ln_pre(x)
+        
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        
+        for i, resblock in enumerate(self.original_forward.transformer.resblocks):
+            x = self.vpt_layers[i](x)
+            x = resblock(x)
+            
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.original_forward.ln_post(x[:, 0, :])
+        
+        if self.original_forward.proj is not None:
+            x = x @ self.original_forward.proj
+        
+        return x
 class PromptMaker(nn.Module):
     def __init__(self, prompts, clip_model, n_ctx=8, CSC=True, 
-                 class_token_position=['end'], condition_dim=512):
+                 class_token_position=['end'], use_vpt=False):
         super().__init__()
         assert 'normal' in prompts and 'abnormal' in prompts
         for position in class_token_position:
             assert position in ['end','middle','front']
         
-        self.prompt_learner = PromptLearner(prompts, n_ctx, CSC, 
-                                          class_token_position, clip_model,
-                                          condition_dim=condition_dim)
+        # Initialize prompt learner without condition_dim
+        self.prompt_learner = PromptLearner(
+            prompts=prompts,
+            n_ctx=n_ctx,
+            CSC=CSC,
+            class_token_position=class_token_position,
+            clip_model=clip_model
+        )
+        
+        # Add VPT if enabled
+        self.use_vpt = use_vpt
+        if use_vpt:
+            self.vpt = VPTLayer(
+                input_dim=clip_model.visual.output_dim,
+                prompt_dim=clip_model.visual.output_dim,
+                prompt_length=n_ctx
+            )
+        
         self.tokenized_prompts = self.prompt_learner.tokenized_prompts
         self.class_token_position = class_token_position
         self.text_encoder = TextEncoder(clip_model)
 
-    def forward(self, image_features, condition=None):
-        prompts = self.prompt_learner(condition)
+    def forward(self, image_features):
+        if self.use_vpt:
+            image_features = self.vpt(image_features)
+            
+        prompts = self.prompt_learner()
         tokenized_prompts = self.tokenized_prompts
         text_features = []
         
         for cls in prompts:
-            class_embedding = self.text_encoder(prompts[cls], 
-                            tokenized_prompts[cls].repeat(len(self.class_token_position),1))
+            class_embedding = self.text_encoder(
+                prompts[cls], 
+                tokenized_prompts[cls].repeat(len(self.class_token_position),1)
+            )
             class_embedding = class_embedding.mean(dim=0)
             class_embedding = class_embedding / class_embedding.norm()
             text_features.append(class_embedding)

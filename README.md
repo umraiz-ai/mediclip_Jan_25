@@ -1,6 +1,6 @@
 This code version runs perfectly with changed Necker.py file.
 Now primarily two files are changed in this branch.
-Adapter and Necker.py. The training .0.9271, AUROC 
+Adapter and Necker.py. The training .0.9267, AUROC 
 
 this repo has updated adapter. updated Necker and updated CoOp.py file.
 
@@ -8,25 +8,23 @@ this repo has updated adapter. updated Necker and updated CoOp.py file.
 
 Especially CoOp.py
 
+## Plan for Visual Prompt Tuning (VPT)
 
-## Step-by-Step Plan to Improve AUROC
-
-1. **Add Attention Mechanism**
-2. **Enhance Condition Integration**
-3. **Add Temperature Scaling**
-4. **Implement Prompt Ensembling**
-5. **Add Contrastive Loss Component**
+1. Create VPTLayer
+2. Create VisualPromptTuner
+3. Integrate with existing PromptMaker
+4. Maintain compatibility with current pipeline
 
 ```python
 
 
 
-Key Improvements:
-1. Added MultiHeadAttention for better context modeling
-2. Enhanced condition embedding with deeper network
-3. Implemented learnable temperature scaling
-4. Added prompt position ensembling
-5. Improved normalization and attention flow
+Key Features:
+1. VPTLayer: Handles prompt injection at each transformer layer
+2. VisualPromptTuner: Manages visual prompt tuning across all layers
+3. Updated PromptMaker: Integrates VPT with existing text prompts
+4. Maintains compatibility with existing pipeline
+5. Added option to enable/disable VPT
 
-To use these improvements, update the training loop to include all three positions (end, middle, front) and adjust the learning rate for the new parameters.
+
 
