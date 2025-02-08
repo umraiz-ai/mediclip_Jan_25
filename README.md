@@ -1,6 +1,6 @@
 This code version runs perfectly with changed Necker.py file.
 Now primarily two files are changed in this branch.
-Adapter and Necker.py. The training .9485, AUROC 
+Adapter and Necker.py. The training .0.9271, AUROC 
 
 this repo has updated adapter. updated Necker and updated CoOp.py file.
 
@@ -9,41 +9,24 @@ this repo has updated adapter. updated Necker and updated CoOp.py file.
 Especially CoOp.py
 
 
-CoOp.py
+## Step-by-Step Plan to Improve AUROC
 
- code:
+1. **Add Attention Mechanism**
+2. **Enhance Condition Integration**
+3. **Add Temperature Scaling**
+4. **Implement Prompt Ensembling**
+5. **Add Contrastive Loss Component**
 
-## Core Components and Working Principle
+```python
 
-The code implements a conditional prompt learning system with three main classes:
 
-1. **TextEncoder**
-- Takes text and converts it into meaningful representations
-- Uses CLIP's transformer to process text
-- Applies positional embeddings to understand word order
-- Projects text into a shared space with images
 
-2. **PromptLearner**
-- Creates learnable prompt templates for both normal and abnormal medical conditions
-- Handles three prompt positions: start (front), middle, and end
-- Now includes condition-aware prompts through a new condition embedding layer
-- Combines fixed text with learnable components
-- Processes prompts differently based on their position (front/middle/end)
+Key Improvements:
+1. Added MultiHeadAttention for better context modeling
+2. Enhanced condition embedding with deeper network
+3. Implemented learnable temperature scaling
+4. Added prompt position ensembling
+5. Improved normalization and attention flow
 
-3. **PromptMaker**
-- Acts as the main interface combining TextEncoder and PromptLearner
-- Takes image features and optional conditions as input
-- Generates text features that align with image features
-- Normalizes the outputs for better comparison
+To use these improvements, update the training loop to include all three positions (end, middle, front) and adjust the learning rate for the new parameters.
 
-## Flow of Operation
-
-1. Input text prompts are tokenized and split into prefix/suffix parts
-2. Learnable components (ctx vectors) are initialized for each class and position
-3. When processing:
-   - Conditions modify the learnable components if provided
-   - Prompts are assembled based on their position (front/middle/end)
-   - Text encoder converts prompts into feature vectors
-   - Features are normalized for comparison with image features
-
-This code essentially creates a learnable bridge between medical images and text descriptions, allowing the system to adapt its understanding based on both the content and additional conditions.

@@ -202,11 +202,18 @@ class TextEncoder(nn.Module):
 
 class PromptLearner(nn.Module):
     def __init__(self, prompts, n_ctx, CSC, class_token_position, clip_model, condition_dim=512):
+        """
+        Initialize PromptLearner with conditional prompt learning support
+        """
         super().__init__()
         
+        # 1. Setup context dimension from CLIP model
         ctx_dim = clip_model.ln_final.weight.shape[0]
+        
+        # 2. Initialize condition embedding layer
         self.condition_embedding = nn.Linear(condition_dim, ctx_dim)
         
+        # 3. Initialize learnable context vectors
         self.ctx = {}
         for cls in prompts:
             for position in class_token_position:
@@ -216,24 +223,34 @@ class PromptLearner(nn.Module):
                     ctx_vectors = torch.empty(n_ctx, ctx_dim).to(clip_model.device)
                 nn.init.normal_(ctx_vectors, std=0.02)
                 self.ctx['{}_{}'.format(cls,position)] = nn.Parameter(ctx_vectors, requires_grad=True)
-
+        
+        # 4. Convert ctx to ParameterDict for optimization
         self.ctx = nn.ParameterDict(self.ctx)
-
+        
+        # 5. Process prompts and tokenization
         prompt_prefix = " ".join(["X"] * n_ctx)
         _tokenizer = SimpleTokenizer()
+        
+        # Split and process prompts
         prompts_split = {cls: [prompt.replace("_", " ") for prompt in prompts[cls]] for cls in prompts}
         prompts_lens = {cls: [len(_tokenizer.encode(prompt)) for prompt in prompts_split[cls]] for cls in prompts_split}
+        
+        # Create learnable token sequences
         prompts_learnable_tokens = {cls:[prompt_prefix + " " + prompt + "." for prompt in prompts_split[cls]] for cls in prompts_split}
+        
+        # Tokenize all prompts
         tokenized_prompts = {cls:torch.cat([tokenize(prompt) for prompt in prompts_learnable_tokens[cls]]).to(clip_model.device) for cls in prompts_learnable_tokens}
-
+        
+        # 6. Get and register embeddings
         with torch.no_grad():
             embeddings = {cls:clip_model.token_embedding(tokenized_prompts[cls]) for cls in tokenized_prompts}
-
+        
         self.register_embeddings = {}
         for cls in embeddings:
             self.register_embeddings['{}_token_prefix'.format(cls)] = embeddings[cls][:, :1, :]
             self.register_embeddings['{}_token_suffix'.format(cls)] = embeddings[cls][:, 1 + n_ctx:, :]
-
+        
+        # 7. Store necessary attributes
         self.n_ctx = n_ctx
         self.tokenized_prompts = tokenized_prompts
         self.prompts_lens = prompts_lens
